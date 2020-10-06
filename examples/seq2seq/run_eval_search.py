@@ -8,7 +8,7 @@ from collections import OrderedDict
 try:
     from .run_eval import datetime_now, run_generate
 except ImportError:
-    from run_eval import datetime_now, run_generate
+    from third_party.transformers.examples.seq2seq.run_eval import datetime_now, run_generate
 
 
 # A table of supported tasks and the list of scores in the order of importance to be sorted by.

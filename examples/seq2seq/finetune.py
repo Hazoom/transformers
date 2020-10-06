@@ -12,7 +12,7 @@ import pytorch_lightning as pl
 import torch
 from torch.utils.data import DataLoader
 
-from lightning_base import BaseTransformer, add_generic_args, generic_train
+from third_party.transformers.examples.lightning_base import BaseTransformer, add_generic_args, generic_train
 from transformers import MBartTokenizer, T5ForConditionalGeneration
 from transformers.modeling_bart import shift_tokens_right
 
@@ -37,8 +37,8 @@ try:
         use_task_specific_params,
     )
 except ImportError:
-    from callbacks import Seq2SeqLoggingCallback, get_checkpoint_callback, get_early_stopping_callback
-    from utils import (
+    from third_party.transformers.examples.seq2seq.callbacks import Seq2SeqLoggingCallback, get_checkpoint_callback, get_early_stopping_callback
+    from third_party.transformers.examples.seq2seq.utils import (
         ROUGE_KEYS,
         LegacySeq2SeqDataset,
         Seq2SeqDataset,
@@ -80,7 +80,8 @@ class SummarizationModule(BaseTransformer):
         self.dataset_kwargs: dict = dict(
             data_dir=self.hparams.data_dir,
             max_source_length=self.hparams.max_source_length,
-            prefix=self.model.config.prefix or "",
+            # prefix=self.model.config.prefix or "",
+            prefix="",
         )
         n_observations_per_split = {
             "train": self.hparams.n_train,

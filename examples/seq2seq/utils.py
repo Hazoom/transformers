@@ -62,7 +62,7 @@ def lmap(f: Callable, x: Iterable) -> List:
 
 def calculate_bleu(output_lns, refs_lns, **kwargs) -> dict:
     """Uses sacrebleu's corpus_bleu implementation."""
-    return {"bleu": round(corpus_bleu(output_lns, [refs_lns], **kwargs).score, 4)}
+    return {"bleu": round(corpus_bleu(output_lns, [refs_lns], lowercase=True, **kwargs).score, 4)}
 
 
 def trim_batch(
@@ -178,13 +178,13 @@ class Seq2SeqDataset(AbstractSeq2SeqDataset):
         """Call prepare_seq2seq_batch."""
         batch_encoding: Dict[str, torch.Tensor] = self.tokenizer.prepare_seq2seq_batch(
             [x["src_texts"] for x in batch],
-            src_lang=self.src_lang,
+            # src_lang=self.src_lang,
             tgt_texts=[x["tgt_texts"] for x in batch],
-            tgt_lang=self.tgt_lang,
+            # tgt_lang=self.tgt_lang,
             max_length=self.max_source_length,
             max_target_length=self.max_target_length,
             return_tensors="pt",
-            add_prefix_space=self.add_prefix_space,
+            # add_prefix_space=self.add_prefix_space,
         ).data
         batch_encoding["ids"] = torch.tensor([x["id"] for x in batch])
         return batch_encoding

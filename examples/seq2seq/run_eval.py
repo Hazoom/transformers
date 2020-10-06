@@ -18,7 +18,7 @@ logger = getLogger(__name__)
 try:
     from .utils import calculate_bleu, calculate_rouge, parse_numeric_n_bool_cl_kwargs, use_task_specific_params
 except ImportError:
-    from utils import calculate_bleu, calculate_rouge, parse_numeric_n_bool_cl_kwargs, use_task_specific_params
+    from third_party.transformers.examples.seq2seq.utils import calculate_bleu, calculate_rouge, parse_numeric_n_bool_cl_kwargs, use_task_specific_params
 
 DEFAULT_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -54,10 +54,12 @@ def generate_summaries_or_translations(
     # update config with task specific params
     use_task_specific_params(model, task)
     if prefix is None:
-        prefix = prefix or getattr(model.config, "prefix", "") or ""
+        # prefix = prefix or getattr(model.config, "prefix", "") or ""
+        prefix = ""
     for examples_chunk in tqdm(list(chunks(examples, batch_size))):
         examples_chunk = [prefix + text for text in examples_chunk]
         batch = tokenizer(examples_chunk, return_tensors="pt", truncation=True, padding="longest").to(device)
+        print(generate_kwargs)
         summaries = model.generate(
             input_ids=batch.input_ids,
             attention_mask=batch.attention_mask,
@@ -145,8 +147,10 @@ def run_generate(verbose=True):
 
     # Compute scores
     score_fn = calculate_bleu if "translation" in args.task else calculate_rouge
-    output_lns = [x.rstrip() for x in open(args.save_path).readlines()]
-    reference_lns = [x.rstrip() for x in open(args.reference_path).readlines()][: len(output_lns)]
+    # output_lns = [x.rstrip() for x in open(args.save_path).readlines()]
+    output_lns = [x.rstrip() for x in open(args.save_path, "rb").read().decode("utf-8").strip().splitlines()]
+    # reference_lns = [x.rstrip() for x in open(args.reference_path).readlines()][: len(output_lns)]
+    reference_lns = [x.rstrip() for x in open(args.reference_path, "rb").read().decode("utf-8").strip().splitlines()][: len(output_lns)]
     scores: dict = score_fn(output_lns, reference_lns)
     scores.update(runtime_metrics)
 

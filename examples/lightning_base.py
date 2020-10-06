@@ -78,11 +78,16 @@ class BaseTransformer(pl.LightningModule):
         self.save_hyperparameters(hparams)
         self.step_count = 0
         self.output_dir = Path(self.hparams.output_dir)
+        config_name = self.hparams.config_name if self.hparams.config_name else self.hparams.model_name_or_path
         cache_dir = self.hparams.cache_dir if self.hparams.cache_dir else None
+        config_args = {"num_labels": num_labels} if num_labels is not None else {}
+        if "t5" in config_name and hparams.dropout is not None:
+            config_args["dropout_rate"] = hparams.dropout
+
         if config is None:
             self.config = AutoConfig.from_pretrained(
-                self.hparams.config_name if self.hparams.config_name else self.hparams.model_name_or_path,
-                **({"num_labels": num_labels} if num_labels is not None else {}),
+                config_name,
+                **config_args,
                 cache_dir=cache_dir,
                 **config_kwargs,
             )
@@ -92,8 +97,10 @@ class BaseTransformer(pl.LightningModule):
         extra_model_params = ("encoder_layerdrop", "decoder_layerdrop", "dropout", "attention_dropout")
         for p in extra_model_params:
             if getattr(self.hparams, p, None):
-                assert hasattr(self.config, p), f"model config doesn't have a `{p}` attribute"
-                setattr(self.config, p, getattr(self.hparams, p))
+                if not hasattr(self.config, p):
+                    logger.warning(f"model config doesn't have a `{p}` attribute")
+                else:
+                    setattr(self.config, p, getattr(self.hparams, p))
 
         if tokenizer is None:
             self.tokenizer = AutoTokenizer.from_pretrained(
@@ -104,12 +111,16 @@ class BaseTransformer(pl.LightningModule):
             self.tokenizer: PreTrainedTokenizer = tokenizer
         self.model_type = MODEL_MODES[mode]
         if model is None:
-            self.model = self.model_type.from_pretrained(
-                self.hparams.model_name_or_path,
-                from_tf=bool(".ckpt" in self.hparams.model_name_or_path),
-                config=self.config,
-                cache_dir=cache_dir,
-            )
+            if self.hparams.model_name_or_path == "scratch":
+                print("Using a model from scratch. Not fine-tuned.")
+                self.model = self.model_type.from_config(config=self.config)
+            else:
+                self.model = self.model_type.from_pretrained(
+                    self.hparams.model_name_or_path,
+                    from_tf=bool(".ckpt" in self.hparams.model_name_or_path),
+                    config=self.config,
+                    cache_dir=cache_dir,
+                )
         else:
             self.model = model
 
