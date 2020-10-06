@@ -25,13 +25,16 @@ from .configuration_auto import (
     BertGenerationConfig,
     CamembertConfig,
     CTRLConfig,
+    DebertaConfig,
     DistilBertConfig,
+    DPRConfig,
     ElectraConfig,
     EncoderDecoderConfig,
     FlaubertConfig,
     FSMTConfig,
     FunnelConfig,
     GPT2Config,
+    LayoutLMConfig,
     LongformerConfig,
     LxmertConfig,
     MarianConfig,
@@ -39,9 +42,11 @@ from .configuration_auto import (
     MobileBertConfig,
     OpenAIGPTConfig,
     PegasusConfig,
+    RagConfig,
     ReformerConfig,
     RetriBertConfig,
     RobertaConfig,
+    SqueezeBertConfig,
     T5Config,
     TransfoXLConfig,
     XLMConfig,
@@ -55,14 +60,18 @@ from .tokenization_bart import BartTokenizer, BartTokenizerFast
 from .tokenization_bert import BertTokenizer, BertTokenizerFast
 from .tokenization_bert_generation import BertGenerationTokenizer
 from .tokenization_bert_japanese import BertJapaneseTokenizer
+from .tokenization_bertweet import BertweetTokenizer
 from .tokenization_camembert import CamembertTokenizer
 from .tokenization_ctrl import CTRLTokenizer
+from .tokenization_deberta import DebertaTokenizer
 from .tokenization_distilbert import DistilBertTokenizer, DistilBertTokenizerFast
+from .tokenization_dpr import DPRQuestionEncoderTokenizer, DPRQuestionEncoderTokenizerFast
 from .tokenization_electra import ElectraTokenizer, ElectraTokenizerFast
 from .tokenization_flaubert import FlaubertTokenizer
 from .tokenization_fsmt import FSMTTokenizer
 from .tokenization_funnel import FunnelTokenizer, FunnelTokenizerFast
 from .tokenization_gpt2 import GPT2Tokenizer, GPT2TokenizerFast
+from .tokenization_layoutlm import LayoutLMTokenizer, LayoutLMTokenizerFast
 from .tokenization_longformer import LongformerTokenizer, LongformerTokenizerFast
 from .tokenization_lxmert import LxmertTokenizer, LxmertTokenizerFast
 from .tokenization_marian import MarianTokenizer
@@ -70,9 +79,12 @@ from .tokenization_mbart import MBartTokenizer
 from .tokenization_mobilebert import MobileBertTokenizer, MobileBertTokenizerFast
 from .tokenization_openai import OpenAIGPTTokenizer, OpenAIGPTTokenizerFast
 from .tokenization_pegasus import PegasusTokenizer
+from .tokenization_phobert import PhobertTokenizer
+from .tokenization_rag import RagTokenizer
 from .tokenization_reformer import ReformerTokenizer
 from .tokenization_retribert import RetriBertTokenizer, RetriBertTokenizerFast
 from .tokenization_roberta import RobertaTokenizer, RobertaTokenizerFast
+from .tokenization_squeezebert import SqueezeBertTokenizer, SqueezeBertTokenizerFast
 from .tokenization_t5 import T5Tokenizer
 from .tokenization_transfo_xl import TransfoXLTokenizer, TransfoXLTokenizerFast
 from .tokenization_xlm import XLMTokenizer
@@ -98,11 +110,16 @@ TOKENIZER_MAPPING = OrderedDict(
         (MarianConfig, (MarianTokenizer, None)),
         (BartConfig, (BartTokenizer, BartTokenizerFast)),
         (LongformerConfig, (LongformerTokenizer, LongformerTokenizerFast)),
+        (RobertaConfig, (BertweetTokenizer, None)),
+        (RobertaConfig, (PhobertTokenizer, None)),
         (RobertaConfig, (RobertaTokenizer, RobertaTokenizerFast)),
         (ReformerConfig, (ReformerTokenizer, None)),
         (ElectraConfig, (ElectraTokenizer, ElectraTokenizerFast)),
         (FunnelConfig, (FunnelTokenizer, FunnelTokenizerFast)),
         (LxmertConfig, (LxmertTokenizer, LxmertTokenizerFast)),
+        (LayoutLMConfig, (LayoutLMTokenizer, LayoutLMTokenizerFast)),
+        (DPRConfig, (DPRQuestionEncoderTokenizer, DPRQuestionEncoderTokenizerFast)),
+        (SqueezeBertConfig, (SqueezeBertTokenizer, SqueezeBertTokenizerFast)),
         (BertConfig, (BertTokenizer, BertTokenizerFast)),
         (OpenAIGPTConfig, (OpenAIGPTTokenizer, OpenAIGPTTokenizerFast)),
         (GPT2Config, (GPT2Tokenizer, GPT2TokenizerFast)),
@@ -113,6 +130,9 @@ TOKENIZER_MAPPING = OrderedDict(
         (CTRLConfig, (CTRLTokenizer, None)),
         (FSMTConfig, (FSMTTokenizer, None)),
         (BertGenerationConfig, (BertGenerationTokenizer, None)),
+        (DebertaConfig, (DebertaTokenizer, None)),
+        (LayoutLMConfig, (LayoutLMTokenizer, None)),
+        (RagConfig, (RagTokenizer, None)),
     ]
 )
 
@@ -185,16 +205,16 @@ class AutoTokenizer:
 
         Examples::
 
-            from transformers import AutoTokenizer
+            >>> from transformers import AutoTokenizer
 
-            # Download vocabulary from S3 and cache.
-            tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
+            >>> # Download vocabulary from S3 and cache.
+            >>> tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
 
-            # Download vocabulary from S3 (user-uploaded) and cache.
-            tokenizer = AutoTokenizer.from_pretrained('dbmdz/bert-base-german-cased')
+            >>> # Download vocabulary from S3 (user-uploaded) and cache.
+            >>> tokenizer = AutoTokenizer.from_pretrained('dbmdz/bert-base-german-cased')
 
-            # If vocabulary files are in a directory (e.g. tokenizer was saved using `save_pretrained('./test/saved_model/')`)
-            tokenizer = AutoTokenizer.from_pretrained('./test/bert_saved_model/')
+            >>> # If vocabulary files are in a directory (e.g. tokenizer was saved using `save_pretrained('./test/saved_model/')`)
+            >>> tokenizer = AutoTokenizer.from_pretrained('./test/bert_saved_model/')
 
         """
         config = kwargs.pop("config", None)
@@ -229,12 +249,12 @@ class AutoTokenizer:
                 )
             config = config.encoder
 
-        for config_class, (tokenizer_class_py, tokenizer_class_fast) in TOKENIZER_MAPPING.items():
-            if isinstance(config, config_class):
-                if tokenizer_class_fast and use_fast:
-                    return tokenizer_class_fast.from_pretrained(pretrained_model_name_or_path, *inputs, **kwargs)
-                else:
-                    return tokenizer_class_py.from_pretrained(pretrained_model_name_or_path, *inputs, **kwargs)
+        if type(config) in TOKENIZER_MAPPING.keys():
+            tokenizer_class_py, tokenizer_class_fast = TOKENIZER_MAPPING[type(config)]
+            if tokenizer_class_fast and use_fast:
+                return tokenizer_class_fast.from_pretrained(pretrained_model_name_or_path, *inputs, **kwargs)
+            else:
+                return tokenizer_class_py.from_pretrained(pretrained_model_name_or_path, *inputs, **kwargs)
 
         raise ValueError(
             "Unrecognized configuration class {} to build an AutoTokenizer.\n"
