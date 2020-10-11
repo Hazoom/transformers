@@ -12,7 +12,7 @@ from typing import Dict, List
 import torch
 from tqdm import tqdm
 
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, EncoderDecoderModel, EncoderDecoderConfig
 from utils import calculate_bleu, calculate_rouge, chunks, parse_numeric_n_bool_cl_kwargs, use_task_specific_params
 
 
@@ -36,12 +36,22 @@ def generate_summaries_or_translations(
     """Save model.generate results to <out_file>, and return how long it took."""
     fout = Path(out_file).open("w", encoding="utf-8")
     model_name = str(model_name)
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(device)
+    if "encoder" in model_name and "decoder" in model_name:
+        model = EncoderDecoderModel.from_pretrained(model_name).to(device)
+    else:
+        model = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(device)
     if fp16:
         model = model.half()
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    if "encoder" in model_name and "decoder" in model_name:
+        tokenizer = AutoTokenizer.from_pretrained(model_name, config=model.config)
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
     logger.info(f"Inferred tokenizer type: {tokenizer.__class__}")  # if this is wrong, check config.model_type.
+
+    decoder_start_token_id = None  # default to config
+    if isinstance(model.config, EncoderDecoderConfig):
+        decoder_start_token_id = model.config.decoder.pad_token_id
 
     start_time = time.time()
     # update config with task specific params
@@ -55,6 +65,7 @@ def generate_summaries_or_translations(
         summaries = model.generate(
             input_ids=batch.input_ids,
             attention_mask=batch.attention_mask,
+            decoder_start_token_id=decoder_start_token_id,
             **generate_kwargs,
         )
         dec = tokenizer.batch_decode(summaries, skip_special_tokens=True, clean_up_tokenization_spaces=False)

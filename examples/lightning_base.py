@@ -20,6 +20,7 @@ from transformers import (
     AutoTokenizer,
     PretrainedConfig,
     PreTrainedTokenizer,
+    EncoderDecoderModel
 )
 from transformers.optimization import (
     Adafactor,
@@ -42,6 +43,7 @@ MODEL_MODES = {
     "language-modeling": AutoModelWithLMHead,
     "summarization": AutoModelForSeq2SeqLM,
     "translation": AutoModelForSeq2SeqLM,
+    "encoder-decoder": EncoderDecoderModel,
 }
 
 
@@ -272,6 +274,22 @@ class BaseTransformer(pl.LightningModule):
         parser.add_argument("--train_batch_size", default=32, type=int)
         parser.add_argument("--eval_batch_size", default=32, type=int)
         parser.add_argument("--adafactor", action="store_true")
+        parser.add_argument(
+            "--encoder_model_name_or_path",
+            default=None,
+            type=str,
+            required=False,
+            help="Path to pretrained model or model identifier from huggingface.co/models "
+                 "for the encoder if using EncoderDecoderModel",
+        )
+        parser.add_argument(
+            "--decoder_model_name_or_path",
+            default=None,
+            type=str,
+            required=False,
+            help="Path to pretrained model or model identifier from huggingface.co/models "
+                 "for the encoder if using EncoderDecoderModel",
+        )
 
 
 class LoggingCallback(pl.Callback):

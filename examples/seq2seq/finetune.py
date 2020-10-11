@@ -15,7 +15,7 @@ import pytorch_lightning as pl
 import torch
 from torch.utils.data import DataLoader
 
-from transformers import MBartTokenizer, T5ForConditionalGeneration
+from transformers import MBartTokenizer, T5ForConditionalGeneration, EncoderDecoderModel, EncoderDecoderConfig
 from transformers.modeling_bart import shift_tokens_right
 from callbacks import Seq2SeqLoggingCallback, get_checkpoint_callback, get_early_stopping_callback
 from utils import (
@@ -60,7 +60,16 @@ class SummarizationModule(BaseTransformer):
             if hparams.sortish_sampler:
                 raise ValueError("--sortish_sampler and --max_tokens_per_batch may not be used simultaneously")
 
-        super().__init__(hparams, num_labels=None, mode=self.mode, **kwargs)
+        config = None
+        model = None
+        if hparams.model_name_or_path == "encoder-decoder":
+            assert hparams.encoder_model_name_or_path is not None, "Encoder model path/name is None"
+            assert hparams.decoder_model_name_or_path is not None, "Encoder model path/name is None"
+            model = EncoderDecoderModel.from_encoder_decoder_pretrained(
+                hparams.encoder_model_name_or_path, hparams.decoder_model_name_or_path
+            )
+            config = model.config
+        super().__init__(hparams, num_labels=None, mode=self.mode, model=model, config=config, **kwargs)
         use_task_specific_params(self.model, "summarization")
         save_git_info(self.hparams.output_dir)
         self.metrics_save_path = Path(self.output_dir) / "metrics.json"
@@ -69,7 +78,13 @@ class SummarizationModule(BaseTransformer):
         self.step_count = 0
         self.metrics = defaultdict(list)
         self.model_type = self.config.model_type
-        self.vocab_size = self.config.tgt_vocab_size if self.model_type == "fsmt" else self.config.vocab_size
+
+        if self.model_type == "fsmt":
+            self.vocab_size = self.config.tgt_vocab_size
+        elif self.model_type == "encoder_decoder":
+            self.vocab_size = self.config.decoder.vocab_size
+        else:
+            self.vocab_size = self.config.vocab_size
 
         self.dataset_kwargs: dict = dict(
             data_dir=self.hparams.data_dir,
@@ -103,8 +118,12 @@ class SummarizationModule(BaseTransformer):
         if self.model.config.decoder_start_token_id is None and isinstance(self.tokenizer, MBartTokenizer):
             self.decoder_start_token_id = self.tokenizer.lang_code_to_id[hparams.tgt_lang]
             self.model.config.decoder_start_token_id = self.decoder_start_token_id
+        if isinstance(self.config, EncoderDecoderConfig):
+            self.decoder_start_token_id = self.config.decoder.pad_token_id
         self.dataset_class = (
-            Seq2SeqDataset if hasattr(self.tokenizer, "prepare_seq2seq_batch") else LegacySeq2SeqDataset
+            Seq2SeqDataset if getattr(
+                self.tokenizer, "prepare_seq2seq_batch"
+            ).__qualname__.partition(".")[0] == self.tokenizer.__class__.__name__ else LegacySeq2SeqDataset
         )
         self.eval_beams = self.model.config.num_beams if self.hparams.eval_beams is None else self.hparams.eval_beams
         if self.hparams.eval_max_gen_length is not None:
@@ -131,7 +150,10 @@ class SummarizationModule(BaseTransformer):
         else:
             decoder_input_ids = shift_tokens_right(tgt_ids, pad_token_id)
 
-        outputs = self(src_ids, attention_mask=src_mask, decoder_input_ids=decoder_input_ids, use_cache=False)
+        if isinstance(self.model, EncoderDecoderModel):
+            outputs = self(src_ids, attention_mask=src_mask, decoder_input_ids=decoder_input_ids)
+        else:
+            outputs = self(src_ids, attention_mask=src_mask, decoder_input_ids=decoder_input_ids, use_cache=False)
         lm_logits = outputs[0]
         if self.hparams.label_smoothing == 0:
             # Same behavior as modeling_bart.py, besides ignoring pad_token_id
@@ -348,8 +370,8 @@ class TranslationModule(SummarizationModule):
 
     def __init__(self, hparams, **kwargs):
         super().__init__(hparams, **kwargs)
-        self.dataset_kwargs["src_lang"] = hparams.src_lang
-        self.dataset_kwargs["tgt_lang"] = hparams.tgt_lang
+        # self.dataset_kwargs["src_lang"] = hparams.src_lang
+        # self.dataset_kwargs["tgt_lang"] = hparams.tgt_lang
 
     def calc_generative_metrics(self, preds, target) -> dict:
         return calculate_bleu(preds, target)
