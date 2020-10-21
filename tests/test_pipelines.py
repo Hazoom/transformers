@@ -3,13 +3,14 @@ from typing import Iterable, List, Optional
 
 from transformers import pipeline
 from transformers.pipelines import SUPPORTED_TASKS, Conversation, DefaultArgumentHandler, Pipeline
-from transformers.testing_utils import require_tf, require_torch, slow, torch_device
+from transformers.testing_utils import require_tf, require_tokenizers, require_torch, slow, torch_device
 
 
 DEFAULT_DEVICE_NUM = -1 if torch_device == "cpu" else 0
 VALID_INPUTS = ["A simple string", ["list of strings"]]
 
 NER_FINETUNED_MODELS = ["sshleifer/tiny-dbmdz-bert-large-cased-finetuned-conll03-english"]
+TF_NER_FINETUNED_MODELS = ["Narsil/small"]
 
 # xlnet-base-cased disabled for now, since it crashes TF2
 FEATURE_EXTRACT_FINETUNED_MODELS = ["sshleifer/tiny-distilbert-base-cased"]
@@ -20,7 +21,7 @@ FILL_MASK_FINETUNED_MODELS = ["sshleifer/tiny-distilroberta-base"]
 LARGE_FILL_MASK_FINETUNED_MODELS = ["distilroberta-base"]  # @slow
 
 SUMMARIZATION_FINETUNED_MODELS = ["sshleifer/bart-tiny-random", "patrickvonplaten/t5-tiny-random"]
-TF_SUMMARIZATION_FINETUNED_MODELS = ["patrickvonplaten/t5-tiny-random"]
+TF_SUMMARIZATION_FINETUNED_MODELS = ["sshleifer/bart-tiny-random", "patrickvonplaten/t5-tiny-random"]
 
 TRANSLATION_FINETUNED_MODELS = [
     ("patrickvonplaten/t5-tiny-random", "translation_en_to_de"),
@@ -341,6 +342,7 @@ class MonoColumnInputTestCase(unittest.TestCase):
             )
 
     @require_torch
+    @require_tokenizers
     def test_torch_summarization(self):
         invalid_inputs = [4, "<mask>"]
         mandatory_keys = ["summary_text"]
@@ -376,6 +378,7 @@ class MonoColumnInputTestCase(unittest.TestCase):
             )
 
     @require_torch
+    @require_tokenizers
     def test_torch_translation(self):
         invalid_inputs = [4, "<mask>"]
         mandatory_keys = ["translation_text"]
@@ -398,6 +401,7 @@ class MonoColumnInputTestCase(unittest.TestCase):
             self._test_mono_column_pipeline(nlp, VALID_INPUTS, mandatory_keys, invalid_inputs=invalid_inputs)
 
     @require_torch
+    @require_tokenizers
     def test_torch_text2text(self):
         invalid_inputs = [4, "<mask>"]
         mandatory_keys = ["generated_text"]
@@ -804,6 +808,14 @@ class NerPipelineTests(unittest.TestCase):
             nlp = pipeline(task="ner", model=model_name, tokenizer=model_name, framework="tf", grouped_entities=True)
             self._test_ner_pipeline(nlp, mandatory_keys)
 
+    @require_tf
+    def test_tf_only_ner(self):
+        mandatory_keys = {"entity", "word", "score"}
+        for model_name in TF_NER_FINETUNED_MODELS:
+            # We don't specificy framework='tf' but it gets detected automatically
+            nlp = pipeline(task="ner", model=model_name, tokenizer=model_name)
+            self._test_ner_pipeline(nlp, mandatory_keys)
+
 
 class PipelineCommonTests(unittest.TestCase):
     pipelines = SUPPORTED_TASKS.keys()
@@ -815,6 +827,7 @@ class PipelineCommonTests(unittest.TestCase):
         for task in self.pipelines:
             with self.subTest(msg="Testing TF defaults with TF and {}".format(task)):
                 pipeline(task, framework="tf")
+                pipeline(task)
 
     @require_torch
     @slow
@@ -823,3 +836,4 @@ class PipelineCommonTests(unittest.TestCase):
         for task in self.pipelines:
             with self.subTest(msg="Testing Torch defaults with PyTorch and {}".format(task)):
                 pipeline(task, framework="pt")
+                pipeline(task)
